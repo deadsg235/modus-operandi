@@ -22,6 +22,7 @@ export default function Player() {
   const pitch = useRef(0)
   const phase = useGameStore((s) => s.phase)
   const setWeapon = useGameStore((s) => s.setWeapon)
+  const regenHealth = useGameStore((s) => s.regenHealth)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -54,6 +55,7 @@ export default function Player() {
 
   useFrame((_, delta) => {
     if (phase !== 'playing') return
+    regenHealth()
 
     // Force YXZ every frame — R3F must not override this
     camera.rotation.order = 'YXZ'

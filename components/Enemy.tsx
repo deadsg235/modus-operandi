@@ -5,10 +5,10 @@ import { useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../store/useGameStore'
 
-const ENEMY_SPEED = 4.5
-const ATTACK_RANGE = 1.1
-const ATTACK_DAMAGE = 15
-const ATTACK_COOLDOWN = 0.7
+const ENEMY_SPEED = 3.2
+const ATTACK_RANGE = 0.9
+const ATTACK_DAMAGE = 6
+const ATTACK_COOLDOWN = 1.4
 
 type Props = {
   id: string

@@ -63,8 +63,8 @@ function Scene() {
   const { camera, scene, gl } = useThree()
   const playerPos = useRef(new THREE.Vector3(1.5, 0.5, 1.5))
   const addEffect = useGameStore((s) => s.addEffect)
-  const registerHit = useGameStore((s) => s.registerHit)
   const spawnDecal = useGameStore((s) => s.spawnDecal)
+  const registerHit = useGameStore((s) => s.registerHit)
   const currentWeapon = useGameStore((s) => s.currentWeapon)
   const phase = useGameStore((s) => s.phase)
   const { weapon, canShoot, lastShot } = useWeapon(currentWeapon)
@@ -73,6 +73,14 @@ function Scene() {
   const flashAdded = useRef(false)
   const isMouseDown = useRef(false)
   const firedThisPress = useRef(false)
+
+  // Store latest refs to avoid stale closures in useFrame
+  const addEffectRef = useRef(addEffect)
+  const spawnDecalRef = useRef(spawnDecal)
+  const registerHitRef = useRef(registerHit)
+  addEffectRef.current = addEffect
+  spawnDecalRef.current = spawnDecal
+  registerHitRef.current = registerHit
 
   useEffect(() => {
     if (flashGroup.current && !flashAdded.current) {
@@ -96,45 +104,50 @@ function Scene() {
     }
   }, [])
 
-  const shoot = useCallback(() => {
+  useFrame(() => {
+    playerPos.current.copy(camera.position)
+
+    if (phase !== 'playing' || !document.pointerLockElement) return
+    if (!isMouseDown.current) return
+    if (!weapon.automatic && firedThisPress.current) return
+
+    const time = performance.now() / 1000
+    if (!canShoot(time)) return
+
+    lastShot.current = time
+    firedThisPress.current = true
     flashRef.current?.fire()
+
+    // Raycast inline — always uses live scene
     const dir = new THREE.Vector3()
     camera.getWorldDirection(dir)
     dir.x += (Math.random() - 0.5) * weapon.spread
     dir.y += (Math.random() - 0.5) * weapon.spread
-    const ray = new THREE.Raycaster(camera.position.clone(), dir.normalize())
+    dir.normalize()
+
+    const ray = new THREE.Raycaster(camera.position.clone(), dir)
     const hits = ray.intersectObjects(scene.children, true)
+
     if (hits.length > 0) {
       const hit = hits[0]
       const isHead = hit.object.name === 'head'
-      registerHit(isHead ? 'head' : 'body')
-      addEffect({ type: 'blood', position: hit.point.clone(), normal: hit.face?.normal.clone(), intensity: isHead ? weapon.headshotMultiplier : 1 })
-      spawnDecal({ position: hit.point.clone(), normal: hit.face?.normal.clone() ?? new THREE.Vector3(0, 1, 0) })
+      const normal = hit.face?.normal.clone() ?? new THREE.Vector3(0, 1, 0)
+
+      registerHitRef.current(isHead ? 'head' : 'body')
+      addEffectRef.current({ type: 'blood', position: hit.point.clone(), normal, intensity: isHead ? weapon.headshotMultiplier : 1 })
+      spawnDecalRef.current({ position: hit.point.clone(), normal })
+
       let obj: THREE.Object3D | null = hit.object
       while (obj) {
         if (obj.userData?.onHit) { obj.userData.onHit(isHead); break }
         obj = obj.parent
       }
     }
-  }, [camera, scene, weapon, registerHit, addEffect, spawnDecal])
-
-  useFrame(() => {
-    // Keep playerPos in sync for enemies
-    playerPos.current.copy(camera.position)
-
-    if (phase !== 'playing' || !document.pointerLockElement) return
-    const time = performance.now() / 1000
-    if (!isMouseDown.current) return
-    if (!weapon.automatic && firedThisPress.current) return
-    if (!canShoot(time)) return
-    lastShot.current = time
-    firedThisPress.current = true
-    shoot()
   })
 
   const handleDeath = useCallback((pos: THREE.Vector3) => {
-    addEffect({ type: 'blood', position: pos, intensity: 1.5 })
-  }, [addEffect])
+    addEffectRef.current({ type: 'blood', position: pos, intensity: 1.5 })
+  }, [])
 
   return (
     <>
@@ -205,6 +218,7 @@ export default function Game() {
       <Canvas
         camera={{ fov: 75, near: 0.05, far: 30, position: [1.5, 0.5, 1.5] }}
         style={{ width: '100vw', height: '100vh', background: '#000' }}
+        onCreated={({ camera }) => { camera.rotation.order = 'YXZ' }}
       >
         <Scene />
       </Canvas>

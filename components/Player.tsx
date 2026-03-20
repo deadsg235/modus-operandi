@@ -23,9 +23,8 @@ export default function Player() {
   const phase = useGameStore((s) => s.phase)
   const setWeapon = useGameStore((s) => s.setWeapon)
 
-  useEffect(() => {
-    camera.rotation.order = 'YXZ'
-  }, [camera])
+  // Set rotation order immediately — not in useEffect
+  camera.rotation.order = 'YXZ'
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -59,6 +58,7 @@ export default function Player() {
   useFrame((_, delta) => {
     if (phase !== 'playing') return
 
+    camera.rotation.order = 'YXZ'
     camera.rotation.y = yaw.current
     camera.rotation.x = pitch.current
 

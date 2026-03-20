@@ -42,9 +42,9 @@ function FlickerLight({ position }: { position: [number, number, number] }) {
   useFrame(({ clock }) => {
     if (!light.current) return
     const t = clock.elapsedTime + offset.current
-    light.current.intensity = 3.5 + Math.sin(t * 9) * 0.6 + Math.sin(t * 3.3) * 0.3
+    light.current.intensity = 6 + Math.sin(t * 9) * 0.8 + Math.sin(t * 3.3) * 0.4
   })
-  return <pointLight ref={light} position={position} intensity={3.5} distance={14} color="#ff7722" decay={2} />
+  return <pointLight ref={light} position={position} intensity={6} distance={18} color="#ff9944" decay={2} />
 }
 
 type PendingHit = { point: THREE.Vector3; normal: THREE.Vector3; isHead: boolean; onHit: (h: boolean) => void }
@@ -137,8 +137,9 @@ function Scene() {
 
   return (
     <>
-      <ambientLight intensity={1.2} color="#3a2010" />
-      <fog attach="fog" args={['#1a0a05', 14, 32]} />
+      <ambientLight intensity={4} color="#ffddbb" />
+      <directionalLight intensity={2} color="#ffeecc" position={[8, 8, 8]} />
+      <fog attach="fog" args={['#2a1a0a', 20, 40]} />
       {TORCH_POSITIONS.map((pos, i) => <FlickerLight key={i} position={pos} />)}
       <GameMap />
       {ENEMY_STARTS.map((pos, i) => (

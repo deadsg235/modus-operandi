@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { MAP } from './Map'
 import { useGameStore } from '../store/useGameStore'
 
-const SPEED = 4
+const SPEED = 7
 const HALF_PI = Math.PI / 2
 
 function isSolid(x: number, z: number) {

@@ -5,10 +5,10 @@ import { useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../store/useGameStore'
 
-const ENEMY_SPEED = 1.8
-const ATTACK_RANGE = 1.2
-const ATTACK_DAMAGE = 8
-const ATTACK_COOLDOWN = 1.5
+const ENEMY_SPEED = 4.5
+const ATTACK_RANGE = 1.1
+const ATTACK_DAMAGE = 15
+const ATTACK_COOLDOWN = 0.7
 
 type Props = {
   id: string
@@ -17,50 +17,66 @@ type Props = {
 }
 
 export default function Enemy({ id, startPos, playerPos }: Props) {
-  const groupRef = useRef<THREE.Group>(null)
-  const meshRef = useRef<THREE.Mesh>(null)
+  const rootRef = useRef<THREE.Group>(null)
+  const bodyRef = useRef<THREE.Group>(null)
   const hp = useRef(100)
   const attackTimer = useRef(ATTACK_COOLDOWN)
   const pendingDamage = useRef(0)
   const isDead = useRef(false)
   const [dead, setDead] = useState(false)
+  const deathTimer = useRef(0)
+  const [dying, setDying] = useState(false)
 
-  // Register hit handler on the group userData
   useEffect(() => {
-    if (!groupRef.current) return
-    groupRef.current.userData.onHit = (isHead: boolean) => {
+    if (!rootRef.current) return
+    rootRef.current.userData.onHit = (isHead: boolean) => {
       if (isDead.current) return
       hp.current -= isHead ? 100 : 34
       if (hp.current <= 0) {
         isDead.current = true
-        const { addKill } = useGameStore.getState()
-        addKill(isHead ? '🎯 HEADSHOT' : '💀 KILL')
-        setDead(true)
+        useGameStore.getState().addKill(isHead ? 'HEADSHOT' : 'KILL')
+        setDying(true)
       }
     }
   }, [])
 
-  // Flush pending damage outside render loop
   useEffect(() => {
-    const id = setInterval(() => {
+    const interval = setInterval(() => {
       if (pendingDamage.current <= 0) return
       const dmg = pendingDamage.current
       pendingDamage.current = 0
       useGameStore.getState().takeDamage(dmg)
     }, 16)
-    return () => clearInterval(id)
+    return () => clearInterval(interval)
   }, [])
 
   useFrame((_, delta) => {
-    if (dead || !meshRef.current) return
-    const pos = meshRef.current.position
+    if (dead || !rootRef.current) return
+
+    if (dying) {
+      deathTimer.current += delta
+      rootRef.current.rotation.x = Math.min(Math.PI / 2, deathTimer.current * 6)
+      rootRef.current.position.y = Math.max(-0.5, startPos.y - deathTimer.current * 2)
+      if (deathTimer.current > 0.5) setDead(true)
+      return
+    }
+
+    const pos = rootRef.current.position
     const dir = playerPos.current.clone().sub(pos)
+    dir.y = 0
     const dist = dir.length()
+
     if (dist > ATTACK_RANGE) {
       dir.normalize().multiplyScalar(ENEMY_SPEED * delta)
       pos.add(dir)
     }
-    meshRef.current.lookAt(playerPos.current.x, pos.y, playerPos.current.z)
+
+    rootRef.current.lookAt(playerPos.current.x, pos.y, playerPos.current.z)
+
+    if (bodyRef.current) {
+      bodyRef.current.position.y = Math.sin(Date.now() * 0.012) * 0.04
+    }
+
     attackTimer.current -= delta
     if (dist <= ATTACK_RANGE && attackTimer.current <= 0) {
       pendingDamage.current += ATTACK_DAMAGE
@@ -71,15 +87,47 @@ export default function Enemy({ id, startPos, playerPos }: Props) {
   if (dead) return null
 
   return (
-    <group ref={groupRef} position={startPos}>
-      <mesh ref={meshRef} name="body">
-        <boxGeometry args={[0.5, 0.8, 0.5]} />
-        <meshStandardMaterial color="#cc2200" roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 0.65, 0]} name="head">
-        <sphereGeometry args={[0.22, 8, 8]} />
-        <meshStandardMaterial color="#dd3300" roughness={0.8} />
-      </mesh>
+    <group ref={rootRef} position={startPos}>
+      <group ref={bodyRef}>
+        {/* torso */}
+        <mesh name="body" position={[0, 0.3, 0]}>
+          <boxGeometry args={[0.42, 0.5, 0.22]} />
+          <meshStandardMaterial color="#1a0a0a" roughness={0.9} metalness={0.1} />
+        </mesh>
+        {/* head */}
+        <mesh name="head" position={[0, 0.72, 0]}>
+          <boxGeometry args={[0.28, 0.28, 0.28]} />
+          <meshStandardMaterial color="#3d1a0a" roughness={0.85} />
+        </mesh>
+        {/* glowing eyes */}
+        <mesh position={[-0.07, 0.76, 0.14]}>
+          <sphereGeometry args={[0.035, 6, 6]} />
+          <meshBasicMaterial color="#ff1100" />
+        </mesh>
+        <mesh position={[0.07, 0.76, 0.14]}>
+          <sphereGeometry args={[0.035, 6, 6]} />
+          <meshBasicMaterial color="#ff1100" />
+        </mesh>
+        <pointLight position={[0, 0.76, 0.2]} color="#ff1100" intensity={0.6} distance={1.5} decay={2} />
+        {/* arms */}
+        <mesh position={[-0.28, 0.22, 0]}>
+          <boxGeometry args={[0.12, 0.44, 0.12]} />
+          <meshStandardMaterial color="#1a0a0a" roughness={0.9} />
+        </mesh>
+        <mesh position={[0.28, 0.22, 0]}>
+          <boxGeometry args={[0.12, 0.44, 0.12]} />
+          <meshStandardMaterial color="#1a0a0a" roughness={0.9} />
+        </mesh>
+        {/* legs */}
+        <mesh position={[-0.12, -0.18, 0]}>
+          <boxGeometry args={[0.14, 0.38, 0.14]} />
+          <meshStandardMaterial color="#1a0a0a" roughness={0.9} />
+        </mesh>
+        <mesh position={[0.12, -0.18, 0]}>
+          <boxGeometry args={[0.14, 0.38, 0.14]} />
+          <meshStandardMaterial color="#1a0a0a" roughness={0.9} />
+        </mesh>
+      </group>
     </group>
   )
 }

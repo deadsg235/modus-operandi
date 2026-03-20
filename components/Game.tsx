@@ -17,6 +17,10 @@ const ENEMY_STARTS = [
   new THREE.Vector3(2.5, 0.5, 10.5),
   new THREE.Vector3(13.5, 0.5, 10.5),
   new THREE.Vector3(10.5, 0.5, 13.5),
+  new THREE.Vector3(5.5, 0.5, 5.5),
+  new THREE.Vector3(12.5, 0.5, 6.5),
+  new THREE.Vector3(3.5, 0.5, 13.5),
+  new THREE.Vector3(9.5, 0.5, 9.5),
 ]
 
 const TORCH_POSITIONS: [number, number, number][] = [
@@ -25,6 +29,8 @@ const TORCH_POSITIONS: [number, number, number][] = [
   [7.5, 2.5, 7.5],
   [3.5, 2.5, 12.5],
   [12.5, 2.5, 12.5],
+  [8.5, 2.5, 2.5],
+  [2.5, 2.5, 8.5],
 ]
 
 function FlickerLight({ position }: { position: [number, number, number] }) {
@@ -33,9 +39,9 @@ function FlickerLight({ position }: { position: [number, number, number] }) {
   useFrame(({ clock }) => {
     if (!light.current) return
     const t = clock.elapsedTime + offset.current
-    light.current.intensity = 1.4 + Math.sin(t * 7) * 0.2
+    light.current.intensity = 1.2 + Math.sin(t * 9) * 0.35 + Math.sin(t * 3.3) * 0.15
   })
-  return <pointLight ref={light} position={position} intensity={1.5} distance={14} color="#ffbb66" decay={2} />
+  return <pointLight ref={light} position={position} intensity={1.4} distance={10} color="#ff6600" decay={2} />
 }
 
 type PendingHit = { point: THREE.Vector3; normal: THREE.Vector3; isHead: boolean; onHit: (h: boolean) => void }
@@ -75,7 +81,6 @@ function Scene() {
     }
   }, [])
 
-  // Flush pending hits to Zustand OUTSIDE the render loop
   useEffect(() => {
     const id = setInterval(() => {
       const hits = pendingHits.current.splice(0)
@@ -92,7 +97,6 @@ function Scene() {
 
   useFrame(() => {
     playerPos.current.copy(camera.position)
-
     if (phase !== 'playing' || !document.pointerLockElement) return
     if (!isMouseDown.current) return
     if (!weapon.automatic && firedThisPress.current) return
@@ -118,7 +122,6 @@ function Scene() {
     const isHead = hit.object.name === 'head'
     const normal = hit.face?.normal.clone() ?? new THREE.Vector3(0, 1, 0)
 
-    // Find onHit callback without calling it mid-frame
     let onHit = (_: boolean) => {}
     let obj: THREE.Object3D | null = hit.object
     while (obj) {
@@ -131,8 +134,8 @@ function Scene() {
 
   return (
     <>
-      <ambientLight intensity={0.5} />
-      <fog attach="fog" args={['#000000', 12, 30]} />
+      <ambientLight intensity={0.08} color="#110000" />
+      <fog attach="fog" args={['#050005', 8, 22]} />
       {TORCH_POSITIONS.map((pos, i) => <FlickerLight key={i} position={pos} />)}
       <GameMap />
       {ENEMY_STARTS.map((pos, i) => (
@@ -153,13 +156,26 @@ function Overlay() {
   const isDead = phase === 'dead'
   return (
     <div style={overlayStyle}>
-      <h1 style={{ color: isDead ? '#cc2222' : '#ff2222', fontSize: 48, margin: 0, letterSpacing: 4 }}>
+      <div style={{ letterSpacing: 12, fontSize: 11, color: '#550000', marginBottom: 8, fontFamily: 'monospace' }}>
+        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+      </div>
+      <h1 style={{ color: isDead ? '#ff0000' : '#cc0000', fontSize: 52, margin: 0, letterSpacing: 8, fontFamily: 'monospace', textShadow: '0 0 30px #ff000088' }}>
         {isDead ? 'YOU DIED' : 'MODUS OPERANDI'}
       </h1>
-      {isDead && <p style={{ color: '#aaa', margin: '8px 0 24px', fontSize: 22 }}>Score: {score}</p>}
+      {isDead && (
+        <p style={{ color: '#660000', margin: '10px 0 0', fontSize: 18, fontFamily: 'monospace', letterSpacing: 4 }}>
+          SCORE: <span style={{ color: '#ff4444' }}>{score}</span>
+        </p>
+      )}
+      <div style={{ width: 200, height: 1, background: '#330000', margin: '24px 0' }} />
       <button style={btnStyle} onClick={() => useGameStore.setState({ health: 100, score: 0, phase: 'playing' })}>
-        {isDead ? 'RESPAWN' : 'PLAY'}
+        {isDead ? '[ RESPAWN ]' : '[ ENTER ]'}
       </button>
+      {!isDead && (
+        <div style={{ marginTop: 24, color: '#440000', fontFamily: 'monospace', fontSize: 11, letterSpacing: 2 }}>
+          WASD · MOUSE · 1/2/3 WEAPON
+        </div>
+      )}
     </div>
   )
 }
@@ -167,19 +183,25 @@ function Overlay() {
 const overlayStyle: React.CSSProperties = {
   position: 'fixed', inset: 0,
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-  background: 'rgba(0,0,0,0.88)', fontFamily: 'monospace', zIndex: 10,
+  background: 'radial-gradient(ellipse at center, #0d0000 0%, #000000 100%)',
+  fontFamily: 'monospace', zIndex: 10,
 }
 const btnStyle: React.CSSProperties = {
-  marginTop: 20, padding: '12px 40px',
-  background: '#cc0000', color: '#fff',
-  border: 'none', fontSize: 20, cursor: 'pointer', letterSpacing: 3, fontFamily: 'monospace',
+  padding: '10px 36px',
+  background: 'transparent',
+  color: '#cc0000',
+  border: '1px solid #550000',
+  fontSize: 16, cursor: 'pointer', letterSpacing: 6, fontFamily: 'monospace',
+  textShadow: '0 0 10px #ff000066',
+  boxShadow: '0 0 20px #33000044',
+  transition: 'all 0.15s',
 }
 
 export default function Game() {
   return (
     <>
       <Canvas
-        camera={{ fov: 75, near: 0.05, far: 30, position: [1.5, 0.5, 1.5] }}
+        camera={{ fov: 80, near: 0.05, far: 30, position: [1.5, 0.5, 1.5] }}
         style={{ width: '100vw', height: '100vh', background: '#000' }}
         onCreated={({ camera }) => { camera.rotation.order = 'YXZ' }}
       >

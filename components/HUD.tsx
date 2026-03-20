@@ -6,10 +6,20 @@ import DamageNumbers from './DamageNumbers'
 import KillFeed from './Killfeed'
 import { useGameStore } from '../store/useGameStore'
 
+const WEAPON_LABELS: Record<string, string> = {
+  AR: 'VX-9 AR',
+  Shotgun: 'KITE SMG',
+  Pistol: 'M-11',
+}
+
 export default function HUD() {
   const health = useGameStore((s) => s.health)
   const score = useGameStore((s) => s.score)
   const weapon = useGameStore((s) => s.currentWeapon)
+
+  const hpColor = health > 50 ? '#cc2200' : health > 25 ? '#ff4400' : '#ff0000'
+  const segments = 20
+  const filledSegments = Math.round((health / 100) * segments)
 
   return (
     <>
@@ -17,35 +27,51 @@ export default function HUD() {
       <HitMarkers />
       <DamageNumbers />
       <KillFeed />
-      {/* Bottom bar */}
+
+      {/* Bottom-left: health */}
       <div style={{
-        position: 'fixed', bottom: 20, left: 20,
-        fontFamily: 'monospace', color: '#fff', userSelect: 'none', pointerEvents: 'none',
+        position: 'fixed', bottom: 24, left: 24,
+        fontFamily: 'monospace', userSelect: 'none', pointerEvents: 'none',
       }}>
-        <div style={{ marginBottom: 6, fontSize: 13, color: '#aaa' }}>{weapon}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, color: '#f55' }}>HP</span>
-          <div style={{ width: 120, height: 8, background: '#333', borderRadius: 4 }}>
-            <div style={{
-              width: `${health}%`, height: '100%',
-              background: health > 50 ? '#44ff44' : health > 25 ? '#ffaa00' : '#ff2222',
-              borderRadius: 4, transition: 'width 0.2s',
+        <div style={{ fontSize: 10, color: '#440000', letterSpacing: 3, marginBottom: 5 }}>
+          VITALS
+        </div>
+        <div style={{ display: 'flex', gap: 2, marginBottom: 4 }}>
+          {Array.from({ length: segments }).map((_, i) => (
+            <div key={i} style={{
+              width: 6, height: 14,
+              background: i < filledSegments ? hpColor : '#1a0000',
+              boxShadow: i < filledSegments ? `0 0 4px ${hpColor}88` : 'none',
+              transition: 'background 0.1s',
             }} />
-          </div>
-          <span style={{ fontSize: 13 }}>{health}</span>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: hpColor, letterSpacing: 2, textShadow: `0 0 8px ${hpColor}` }}>
+          {health} HP
         </div>
       </div>
+
+      {/* Bottom-right: weapon + score */}
       <div style={{
-        position: 'fixed', bottom: 20, right: 20,
-        fontFamily: 'monospace', color: '#fff', fontSize: 16, userSelect: 'none', pointerEvents: 'none',
+        position: 'fixed', bottom: 24, right: 24,
+        fontFamily: 'monospace', color: '#fff', userSelect: 'none', pointerEvents: 'none',
+        textAlign: 'right',
       }}>
-        SCORE: {score}
+        <div style={{ fontSize: 10, color: '#440000', letterSpacing: 3, marginBottom: 4 }}>SCORE</div>
+        <div style={{ fontSize: 22, color: '#cc2200', letterSpacing: 4, textShadow: '0 0 12px #ff000066' }}>
+          {score}
+        </div>
+        <div style={{ marginTop: 10, fontSize: 10, color: '#550000', letterSpacing: 3 }}>
+          {WEAPON_LABELS[weapon] ?? weapon}
+        </div>
       </div>
+
+      {/* Center-bottom hint */}
       <div style={{
-        position: 'fixed', bottom: 48, left: '50%', transform: 'translateX(-50%)',
-        fontFamily: 'monospace', color: '#888', fontSize: 11, pointerEvents: 'none',
+        position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+        fontFamily: 'monospace', color: '#2a0000', fontSize: 10, pointerEvents: 'none', letterSpacing: 2,
       }}>
-        CLICK TO AIM · WASD MOVE · 1/2/3 WEAPON
+        WASD · AIM · 1/2/3
       </div>
     </>
   )

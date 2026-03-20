@@ -19,7 +19,7 @@ export const MAP: number[][] = [
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
 ]
 
-const WALL_COLORS = ['#8a6848', '#7a5838', '#856040', '#704e30', '#906a4a']
+const WALL_COLORS = ['#c8a882', '#b89060', '#c09870', '#aa8050', '#d0b090']
 
 export default function GameMap() {
   const walls: JSX.Element[] = []
@@ -31,7 +31,7 @@ export default function GameMap() {
         walls.push(
           <mesh key={`${row}-${col}`} position={[col + 0.5, 0.5, row + 0.5]}>
             <boxGeometry args={[1, 1, 1]} />
-            <meshLambertMaterial color={color} />
+            <meshStandardMaterial color={color} roughness={0.9} metalness={0} />
           </mesh>
         )
       }
@@ -45,11 +45,11 @@ export default function GameMap() {
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[W / 2, 0, H / 2]}>
         <planeGeometry args={[W, H]} />
-        <meshLambertMaterial color="#5a4030" />
+        <meshStandardMaterial color="#8a6a4a" roughness={1} metalness={0} />
       </mesh>
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[W / 2, 1, H / 2]}>
         <planeGeometry args={[W, H]} />
-        <meshLambertMaterial color="#3a2a1e" />
+        <meshStandardMaterial color="#6a5040" roughness={1} metalness={0} />
       </mesh>
       {walls}
     </group>

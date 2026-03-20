@@ -137,9 +137,11 @@ function Scene() {
 
   return (
     <>
-      <ambientLight intensity={4} color="#ffddbb" />
-      <directionalLight intensity={2} color="#ffeecc" position={[8, 8, 8]} />
-      <fog attach="fog" args={['#2a1a0a', 20, 40]} />
+      <ambientLight intensity={8} color="#ffffff" />
+      <hemisphereLight args={['#ffddaa', '#aa6633', 3]} />
+      <directionalLight intensity={3} color="#ffeecc" position={[8, 8, 8]} />
+      <directionalLight intensity={2} color="#ffddaa" position={[-8, 6, -8]} />
+      <fog attach="fog" args={['#3a2010', 22, 44]} />
       {TORCH_POSITIONS.map((pos, i) => <FlickerLight key={i} position={pos} />)}
       <GameMap />
       {ENEMY_STARTS.map((pos, i) => (

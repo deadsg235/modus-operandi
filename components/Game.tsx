@@ -12,6 +12,24 @@ import MuzzleFlash, { type MuzzleFlashHandle } from './MuzzleFlash'
 import { useGameStore } from '../store/useGameStore'
 import { useWeapon } from './useweapon'
 
+function DamageProjector() {
+  const { camera } = useThree()
+  const numbers = useGameStore((s) => s.damageNumbers)
+  const setDamagePositions = useGameStore((s) => s.setDamagePositions)
+  useFrame(() => {
+    const newPos: Record<number, { x: number; y: number }> = {}
+    numbers.forEach((n) => {
+      const v = n.position.clone().project(camera)
+      newPos[n.id] = {
+        x: (v.x * 0.5 + 0.5) * window.innerWidth,
+        y: (-v.y * 0.5 + 0.5) * window.innerHeight,
+      }
+    })
+    setDamagePositions(newPos)
+  })
+  return null
+}
+
 const ENEMY_STARTS = [
   new THREE.Vector3(3.5, 0.5, 3.5),
   new THREE.Vector3(12.5, 0.5, 3.5),
@@ -138,6 +156,7 @@ function Scene() {
       ))}
       <Player />
       <EffectsManager />
+      <DamageProjector />
       <group ref={flashGroup}>
         <MuzzleFlash ref={flashRef} />
       </group>

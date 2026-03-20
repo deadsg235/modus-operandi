@@ -51,6 +51,7 @@ export const WEAPONS: Record<WeaponType, {
 type HitMarker = { id: number; type: 'body' | 'head' }
 type DamageNumber = { id: number; dmg: number; position: THREE.Vector3 }
 type KillFeedEntry = { id: number; text: string }
+type ScreenPos = { x: number; y: number }
 
 type GameState = {
   // Player
@@ -83,6 +84,8 @@ type GameState = {
   addHitMarker: (type: 'body' | 'head') => void
   damageNumbers: DamageNumber[]
   addDamageNumber: (dmg: number, position: THREE.Vector3) => void
+  damagePositions: Record<number, ScreenPos>
+  setDamagePositions: (positions: Record<number, ScreenPos>) => void
   killFeed: KillFeedEntry[]
   addKill: (text: string) => void
 
@@ -151,6 +154,8 @@ export const useGameStore = create<GameState>((set) => ({
   damageNumbers: [],
   addDamageNumber: (dmg, position) =>
     set((s) => ({ damageNumbers: [...s.damageNumbers, { id: Date.now(), dmg, position }] })),
+  damagePositions: {},
+  setDamagePositions: (positions) => set({ damagePositions: positions }),
 
   killFeed: [],
   addKill: (text) =>

@@ -4,16 +4,11 @@ import { useGameStore } from '../store/useGameStore'
 import BloodDecal from './BloodDecal'
 
 export default function DecalManager() {
-  const decals = useGameStore((s) => s.decals)
-
+  const decals = useGameStore((s) => s.decals.slice(-30))
   return (
     <>
       {decals.map((d, i) => (
-        <BloodDecal
-          key={i}
-          position={d.position}
-          normal={d.normal}
-        />
+        <BloodDecal key={i} position={d.position} normal={d.normal} />
       ))}
     </>
   )

@@ -1,18 +1,17 @@
 'use client'
 
-import BloodDecal from './BloodFX'
+import BloodFX from './BloodFX'
 import { useGameStore } from '../store/useGameStore'
 
 export default function EffectsManager() {
-  const effects = useGameStore((s) => s.effects)
-
+  const effects = useGameStore((s) => s.effects.slice(-40))
   return (
     <>
-      {effects.map((e, i) => {
-        if (e.type === 'blood') {
-          return <BloodDecal key={i} position={e.position} normal={e.normal} />
-        }
-      })}
+      {effects.map((e, i) =>
+        e.type === 'blood'
+          ? <BloodFX key={i} position={e.position} normal={e.normal} />
+          : null
+      )}
     </>
   )
 }

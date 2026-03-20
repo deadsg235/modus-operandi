@@ -5,12 +5,9 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { MAP } from './Map'
 import { useGameStore } from '../store/useGameStore'
-import { type WeaponType } from '../store/useGameStore'
 
 const SPEED = 4
 const HALF_PI = Math.PI / 2
-
-export const pitchRef = { current: 0 }
 
 function isSolid(x: number, z: number) {
   const col = Math.floor(x)
@@ -23,10 +20,12 @@ export default function Player() {
   const keys = useRef<Record<string, boolean>>({})
   const yaw = useRef(0)
   const pitch = useRef(0)
-  pitchRef.current = pitch.current // expose for recoil
-  const setPosition = useGameStore((s) => s.setPosition)
   const phase = useGameStore((s) => s.phase)
   const setWeapon = useGameStore((s) => s.setWeapon)
+
+  useEffect(() => {
+    camera.rotation.order = 'YXZ'
+  }, [camera])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -40,14 +39,11 @@ export default function Player() {
     const onMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== gl.domElement) return
       yaw.current -= e.movementX * 0.002
-      pitch.current = Math.max(-HALF_PI + 0.1, Math.min(HALF_PI - 0.1, pitch.current - e.movementY * 0.002))
-      pitchRef.current = pitch.current
+      pitch.current = Math.max(-HALF_PI + 0.05, Math.min(HALF_PI - 0.05, pitch.current - e.movementY * 0.002))
     }
     const onClick = () => {
-      if (phase !== 'playing') return
-      gl.domElement.requestPointerLock()
+      if (phase === 'playing') gl.domElement.requestPointerLock()
     }
-
     window.addEventListener('keydown', onKey)
     window.addEventListener('keyup', onKey)
     window.addEventListener('mousemove', onMouseMove)
@@ -58,15 +54,11 @@ export default function Player() {
       window.removeEventListener('mousemove', onMouseMove)
       gl.domElement.removeEventListener('click', onClick)
     }
-  }, [camera, gl, phase, setWeapon])
+  }, [gl, phase, setWeapon])
 
   useFrame((_, delta) => {
     if (phase !== 'playing') return
 
-    // sync pitch from external writes (e.g. recoil)
-    pitch.current = pitchRef.current
-
-    camera.rotation.order = 'YXZ'
     camera.rotation.y = yaw.current
     camera.rotation.x = pitch.current
 
@@ -88,7 +80,6 @@ export default function Player() {
     }
 
     camera.position.y = 0.5
-    setPosition({ x: camera.position.x, y: 0.5, z: camera.position.z }, yaw.current)
   })
 
   return null

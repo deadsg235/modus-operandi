@@ -11,13 +11,13 @@ import EffectsManager from './EffectsManager'
 import MuzzleFlash, { type MuzzleFlashHandle } from './MuzzleFlash'
 import { useGameStore } from '../store/useGameStore'
 import { useWeapon } from './useweapon'
-import { pitchRef } from './Player'
 
 function DamageProjector() {
   const { camera } = useThree()
   const numbers = useGameStore((s) => s.damageNumbers)
   const setDamagePositions = useGameStore((s) => s.setDamagePositions)
   useFrame(() => {
+    if (numbers.length === 0) return
     const newPos: Record<number, { x: number; y: number }> = {}
     numbers.forEach((n) => {
       const v = n.position.clone().project(camera)
@@ -40,11 +40,11 @@ const ENEMY_STARTS = [
 ]
 
 const TORCH_POSITIONS: [number, number, number][] = [
-  [3.5, 0.85, 3.5],
-  [12.5, 0.85, 3.5],
-  [7.5, 0.85, 7.5],
-  [3.5, 0.85, 12.5],
-  [12.5, 0.85, 12.5],
+  [3.5, 2.5, 3.5],
+  [12.5, 2.5, 3.5],
+  [7.5, 2.5, 7.5],
+  [3.5, 2.5, 12.5],
+  [12.5, 2.5, 12.5],
 ]
 
 function FlickerLight({ position }: { position: [number, number, number] }) {
@@ -53,92 +53,86 @@ function FlickerLight({ position }: { position: [number, number, number] }) {
   useFrame(({ clock }) => {
     if (!light.current) return
     const t = clock.elapsedTime + offset.current
-    light.current.intensity = 0.8 + Math.sin(t * 7) * 0.15 + Math.sin(t * 13) * 0.05
+    light.current.intensity = 1.2 + Math.sin(t * 7) * 0.2 + Math.sin(t * 13) * 0.1
   })
-  return <pointLight ref={light} position={position} intensity={1.5} distance={12} color="#ff9944" decay={2} />
+  return <pointLight ref={light} position={position} intensity={1.5} distance={14} color="#ffbb66" decay={2} />
 }
 
-// Separate inner component so hooks (useThree, useFrame) run inside Canvas context
 function Scene() {
   const { camera, scene, gl } = useThree()
-  const playerPos = useRef(new THREE.Vector3(1.5, 0.5, 1.5))
   const addEffect = useGameStore((s) => s.addEffect)
   const registerHit = useGameStore((s) => s.registerHit)
   const spawnDecal = useGameStore((s) => s.spawnDecal)
   const currentWeapon = useGameStore((s) => s.currentWeapon)
-  const { weapon, canShoot, getRecoil, lastShot } = useWeapon(currentWeapon)
+  const phase = useGameStore((s) => s.phase)
+  const { weapon, canShoot, lastShot } = useWeapon(currentWeapon)
   const flashRef = useRef<MuzzleFlashHandle>(null)
   const flashGroup = useRef<THREE.Group>(null)
+  const flashAdded = useRef(false)
+  const isMouseDown = useRef(false)
 
-  useFrame(() => {
-    playerPos.current.copy(camera.position)
-    ;(window as any).sceneEnemies = scene.children
-    if (flashGroup.current) camera.add(flashGroup.current)
-  })
-
-  const spawnDirectionalSpray = useCallback((position: THREE.Vector3, direction: THREE.Vector3, count: number) => {
-    for (let i = 0; i < count; i++) {
-      addEffect({ type: 'blood', position: position.clone(), normal: direction.clone(), intensity: 2 + Math.random() })
+  // Add flash group to camera once
+  useEffect(() => {
+    if (flashGroup.current && !flashAdded.current) {
+      camera.add(flashGroup.current)
+      flashAdded.current = true
     }
-  }, [addEffect])
+  }, [camera])
 
-  const shootRef = useRef<() => void>(() => {})
+  // Track mouse button state
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => { if (e.button === 0) isMouseDown.current = true }
+    const onUp   = (e: MouseEvent) => { if (e.button === 0) isMouseDown.current = false }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
 
   const shoot = useCallback(() => {
-    const time = performance.now() / 1000
-    if (!canShoot(time)) return
-
-    lastShot.current = time
     flashRef.current?.fire()
-
-    const spreadX = (Math.random() - 0.5) * weapon.spread
-    const spreadY = (Math.random() - 0.5) * weapon.spread
 
     const direction = new THREE.Vector3()
     camera.getWorldDirection(direction)
-    direction.x += spreadX
-    direction.y += spreadY
+    direction.x += (Math.random() - 0.5) * weapon.spread
+    direction.y += (Math.random() - 0.5) * weapon.spread
 
     const raycaster = new THREE.Raycaster(camera.position, direction.normalize())
     const intersects = raycaster.intersectObjects(scene.children, true)
 
-    const recoil = getRecoil()
-    pitchRef.current = Math.max(-Math.PI / 2 + 0.1, pitchRef.current - recoil)
-
     if (intersects.length > 0) {
       const hit = intersects[0]
       const isHead = hit.object.name === 'head'
-
       registerHit(isHead ? 'head' : 'body')
-      addEffect({ type: 'blood', position: hit.point.clone(), normal: hit.face?.normal.clone(), intensity: isHead ? weapon.headshotMultiplier : 1 })
-
+      addEffect({
+        type: 'blood',
+        position: hit.point.clone(),
+        normal: hit.face?.normal.clone(),
+        intensity: isHead ? weapon.headshotMultiplier : 1,
+      })
       spawnDecal({
         position: hit.point.clone(),
         normal: hit.face?.normal.clone() ?? new THREE.Vector3(0, 1, 0),
       })
-
-      if (isHead) {
-        spawnDirectionalSpray(hit.point, camera.getWorldDirection(new THREE.Vector3()), weapon.sprayCount)
-      }
-
       let obj: THREE.Object3D | null = hit.object
       while (obj) {
         if (obj.userData?.onHit) { obj.userData.onHit(isHead); break }
         obj = obj.parent
       }
     }
-  }, [camera, scene, weapon, canShoot, getRecoil, lastShot, registerHit, addEffect, spawnDecal, spawnDirectionalSpray])
+  }, [camera, scene, weapon, registerHit, addEffect, spawnDecal])
 
-  shootRef.current = shoot
-
-  useEffect(() => {
-    const onMouseDown = (e: MouseEvent) => {
-      if (document.pointerLockElement !== gl.domElement) return
-      if (e.button === 0) shootRef.current()
+  useFrame(() => {
+    if (phase !== 'playing') return
+    if (!document.pointerLockElement) return
+    const time = performance.now() / 1000
+    if (isMouseDown.current && canShoot(time)) {
+      lastShot.current = time
+      shoot()
     }
-    window.addEventListener('mousedown', onMouseDown)
-    return () => window.removeEventListener('mousedown', onMouseDown)
-  }, [gl])
+  })
 
   const handleDeath = useCallback((pos: THREE.Vector3) => {
     addEffect({ type: 'blood', position: pos, intensity: 1.5 })
@@ -146,8 +140,8 @@ function Scene() {
 
   return (
     <>
-      <ambientLight intensity={0.6} />
-      <fog attach="fog" args={['#000000', 10, 28]} />
+      <ambientLight intensity={0.5} />
+      <fog attach="fog" args={['#000000', 12, 30]} />
       {TORCH_POSITIONS.map((pos, i) => <FlickerLight key={i} position={pos} />)}
       <GameMap />
       {ENEMY_STARTS.map((pos, i) => (
@@ -155,7 +149,7 @@ function Scene() {
           key={i}
           id={`enemy-${i}`}
           startPos={pos}
-          playerPos={playerPos}
+          playerPos={useRef(new THREE.Vector3(1.5, 0.5, 1.5))}
           onDeath={handleDeath}
         />
       ))}
@@ -171,12 +165,8 @@ function Scene() {
 
 function Overlay() {
   const phase = useGameStore((s) => s.phase)
-  const setPhase = useGameStore((s) => s.setPhase)
-  const health = useGameStore((s) => s.health)
   const score = useGameStore((s) => s.score)
-
   if (phase === 'playing') return null
-
   const isDead = phase === 'dead'
   return (
     <div style={overlayStyle}>
@@ -186,9 +176,7 @@ function Overlay() {
       {isDead && <p style={{ color: '#aaa', margin: '8px 0 24px' }}>Score: {score}</p>}
       <button
         style={btnStyle}
-        onClick={() => {
-          useGameStore.setState({ health: 100, score: 0, phase: 'playing' })
-        }}
+        onClick={() => useGameStore.setState({ health: 100, score: 0, phase: 'playing' })}
       >
         {isDead ? 'RESPAWN' : 'START'}
       </button>
@@ -199,23 +187,24 @@ function Overlay() {
 const overlayStyle: React.CSSProperties = {
   position: 'fixed', inset: 0,
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-  background: 'rgba(0,0,0,0.82)',
+  background: 'rgba(0,0,0,0.85)',
   fontFamily: 'monospace',
   zIndex: 10,
 }
 
 const btnStyle: React.CSSProperties = {
   marginTop: 16, padding: '10px 32px',
-  background: '#222', color: '#fff',
-  border: '1px solid #555', fontSize: 18,
+  background: '#cc0000', color: '#fff',
+  border: 'none', fontSize: 18,
   cursor: 'pointer', letterSpacing: 3,
+  fontFamily: 'monospace',
 }
 
 export default function Game() {
   return (
     <>
       <Canvas
-        camera={{ fov: 75, near: 0.05, far: 22, position: [1.5, 0.5, 1.5] }}
+        camera={{ fov: 75, near: 0.05, far: 30, position: [1.5, 0.5, 1.5] }}
         style={{ width: '100vw', height: '100vh', background: '#000' }}
       >
         <Scene />

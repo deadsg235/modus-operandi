@@ -7,8 +7,8 @@ import { useGameStore } from '../store/useGameStore'
 
 const ENEMY_SPEED = 1.8
 const ATTACK_RANGE = 1.2
-const ATTACK_DAMAGE = 10
-const ATTACK_COOLDOWN = 1.0
+const ATTACK_DAMAGE = 8
+const ATTACK_COOLDOWN = 1.5
 
 type Props = {
   id: string
@@ -20,7 +20,7 @@ type Props = {
 export default function Enemy({ id, startPos, playerPos, onDeath }: Props) {
   const mesh = useRef<THREE.Mesh>(null)
   const hp = useRef(100)
-  const attackTimer = useRef(0)
+  const attackTimer = useRef(ATTACK_COOLDOWN)
   const [dead, setDead] = useState(false)
   const takeDamage = useGameStore((s) => s.takeDamage)
   const addHitMarker = useGameStore((s) => s.addHitMarker)

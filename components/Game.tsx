@@ -33,11 +33,11 @@ function DamageProjector() {
 }
 
 const ENEMY_STARTS = [
-  new THREE.Vector3(3.5, 0.5, 3.5),
-  new THREE.Vector3(12.5, 0.5, 3.5),
   new THREE.Vector3(7.5, 0.5, 7.5),
-  new THREE.Vector3(3.5, 0.5, 12.5),
-  new THREE.Vector3(12.5, 0.5, 12.5),
+  new THREE.Vector3(10.5, 0.5, 2.5),
+  new THREE.Vector3(2.5, 0.5, 10.5),
+  new THREE.Vector3(13.5, 0.5, 10.5),
+  new THREE.Vector3(10.5, 0.5, 13.5),
 ]
 
 const TORCH_POSITIONS: [number, number, number][] = [

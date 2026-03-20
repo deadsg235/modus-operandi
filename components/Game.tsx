@@ -7,8 +7,6 @@ import GameMap from './Map'
 import Player from './Player'
 import Enemy from './Enemy'
 import HUD from './HUD'
-import EffectsManager from './EffectsManager'
-import DecalManager from './DecalManager'
 import MuzzleFlash, { type MuzzleFlashHandle } from './MuzzleFlash'
 import { useGameStore } from '../store/useGameStore'
 import { useWeapon } from './useweapon'
@@ -82,12 +80,10 @@ function Scene() {
     const id = setInterval(() => {
       const hits = pendingHits.current.splice(0)
       if (!hits.length) return
-      const { addEffect, spawnDecal, registerHit, addHitMarker } = useGameStore.getState()
+      const { registerHit, addHitMarker } = useGameStore.getState()
       for (const h of hits) {
         registerHit(h.isHead ? 'head' : 'body')
         addHitMarker(h.isHead ? 'head' : 'body')
-        addEffect({ type: 'blood', position: h.point, normal: h.normal, intensity: h.isHead ? 2 : 1 })
-        spawnDecal({ position: h.point, normal: h.normal })
         h.onHit(h.isHead)
       }
     }, 16)
@@ -143,8 +139,6 @@ function Scene() {
         <Enemy key={i} id={`enemy-${i}`} startPos={pos} playerPos={playerPos} />
       ))}
       <Player />
-      <EffectsManager />
-      <DecalManager />
       <group ref={flashGroup}>
         <MuzzleFlash ref={flashRef} />
       </group>

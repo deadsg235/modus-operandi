@@ -33,11 +33,8 @@ export default function Enemy({ id, startPos, playerPos }: Props) {
       hp.current -= isHead ? 100 : 34
       if (hp.current <= 0) {
         isDead.current = true
-        const { addKill, addEffect } = useGameStore.getState()
+        const { addKill } = useGameStore.getState()
         addKill(isHead ? '🎯 HEADSHOT' : '💀 KILL')
-        if (meshRef.current) {
-          addEffect({ type: 'blood', position: meshRef.current.position.clone(), intensity: 2 })
-        }
         setDead(true)
       }
     }

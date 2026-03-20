@@ -3,17 +3,10 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { MAP } from './Map'
 import { useGameStore } from '../store/useGameStore'
 
 const SPEED = 7
 const HALF_PI = Math.PI / 2
-
-function isSolid(x: number, z: number) {
-  const col = Math.floor(x)
-  const row = Math.floor(z)
-  return MAP[row]?.[col] === 1
-}
 
 export default function Player() {
   const { camera, gl } = useThree()
@@ -62,7 +55,6 @@ export default function Player() {
     if (phase !== 'playing') return
     regenHealth()
 
-    // Force YXZ every frame — R3F must not override this
     camera.rotation.order = 'YXZ'
     camera.rotation.y = yaw.current
     camera.rotation.x = pitch.current
@@ -79,10 +71,8 @@ export default function Player() {
 
     if (move.lengthSq() > 0) {
       move.normalize().multiplyScalar(SPEED * delta)
-      const nx = camera.position.x + move.x
-      const nz = camera.position.z + move.z
-      if (!isSolid(nx, camera.position.z)) camera.position.x = nx
-      if (!isSolid(camera.position.x, nz)) camera.position.z = nz
+      camera.position.x += move.x
+      camera.position.z += move.z
     }
 
     camera.position.y = 0.5

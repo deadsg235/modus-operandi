@@ -1,57 +1,45 @@
 'use client'
 
-export const MAP: number[][] = [
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,1,1,0,0,0,0,0,0,0,1,1,0,0,1],
-  [1,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,0,0,0,1,1,1,1,0,0,0,0,0,0,1],
-  [1,0,0,0,0,1,0,0,1,0,0,0,0,0,0,1],
-  [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
-  [1,0,0,0,0,1,1,1,1,0,0,0,0,0,0,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1],
-  [1,0,1,1,0,0,0,0,0,0,0,1,1,0,0,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-]
+// Open battlefield — no outer walls, just scattered cover pillars
+// Pillar positions on a loose grid with gaps for movement
+export const PILLARS: [number, number][] = []
+
+const GRID = 200
+const SPACING = 12
+
+for (let x = -GRID / 2; x <= GRID / 2; x += SPACING) {
+  for (let z = -GRID / 2; z <= GRID / 2; z += SPACING) {
+    // Skip center area so player has open space to start
+    if (Math.abs(x) < 20 && Math.abs(z) < 20) continue
+    // Random offset so it doesn't look like a perfect grid
+    const ox = (Math.sin(x * 0.3 + z * 0.7) * 3)
+    const oz = (Math.cos(x * 0.5 + z * 0.2) * 3)
+    PILLARS.push([x + ox, z + oz])
+  }
+}
 
 const WALL_COLORS = ['#c8a882', '#b89060', '#c09870', '#aa8050', '#d0b090']
 
 export default function GameMap() {
-  const walls: JSX.Element[] = []
+  return (
+    <group>
+      {/* Massive floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+        <planeGeometry args={[400, 400]} />
+        <meshStandardMaterial color="#8a6a4a" roughness={1} metalness={0} />
+      </mesh>
 
-  for (let row = 0; row < MAP.length; row++) {
-    for (let col = 0; col < MAP[row].length; col++) {
-      if (MAP[row][col] === 1) {
-        const color = WALL_COLORS[(row * 3 + col * 7) % WALL_COLORS.length]
-        walls.push(
-          <mesh key={`${row}-${col}`} position={[col + 0.5, 0.5, row + 0.5]}>
-            <boxGeometry args={[1, 1, 1]} />
+      {/* Scattered cover pillars */}
+      {PILLARS.map(([x, z], i) => {
+        const color = WALL_COLORS[i % WALL_COLORS.length]
+        const height = 0.8 + (i % 3) * 0.4
+        return (
+          <mesh key={i} position={[x, height / 2, z]}>
+            <boxGeometry args={[1.2, height, 1.2]} />
             <meshStandardMaterial color={color} roughness={0.9} metalness={0} />
           </mesh>
         )
-      }
-    }
-  }
-
-  const W = MAP[0].length
-  const H = MAP.length
-
-  return (
-    <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[W / 2, 0, H / 2]}>
-        <planeGeometry args={[W, H]} />
-        <meshStandardMaterial color="#8a6a4a" roughness={1} metalness={0} />
-      </mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[W / 2, 1, H / 2]}>
-        <planeGeometry args={[W, H]} />
-        <meshStandardMaterial color="#6a5040" roughness={1} metalness={0} />
-      </mesh>
-      {walls}
+      })}
     </group>
   )
 }

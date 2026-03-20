@@ -16,6 +16,7 @@ export default function HUD() {
   const health = useGameStore((s) => s.health)
   const score = useGameStore((s) => s.score)
   const weapon = useGameStore((s) => s.currentWeapon)
+  const wave = useGameStore((s) => s.wave)
 
   const hpColor = health > 50 ? '#cc2200' : health > 25 ? '#ff4400' : '#ff0000'
   const segments = 20
@@ -57,7 +58,7 @@ export default function HUD() {
         fontFamily: 'monospace', color: '#fff', userSelect: 'none', pointerEvents: 'none',
         textAlign: 'right',
       }}>
-        <div style={{ fontSize: 10, color: '#440000', letterSpacing: 3, marginBottom: 4 }}>SCORE</div>
+        <div style={{ fontSize: 10, color: '#440000', letterSpacing: 3, marginBottom: 4 }}>WAVE {wave} · SCORE</div>
         <div style={{ fontSize: 22, color: '#cc2200', letterSpacing: 4, textShadow: '0 0 12px #ff000066' }}>
           {score}
         </div>

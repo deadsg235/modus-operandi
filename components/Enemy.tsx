@@ -12,10 +12,10 @@ const ATTACK_COOLDOWN = 1.4
 type BehaviorType = 'charger' | 'flanker' | 'stalker' | 'berserker'
 
 const BEHAVIOR_CONFIGS: Record<BehaviorType, { speed: number; torso: string; eye: string }> = {
-  charger:  { speed: 3.8, torso: '#1a0a0a', eye: '#ff1100' },
-  flanker:  { speed: 3.2, torso: '#0a0a1a', eye: '#4488ff' },
-  stalker:  { speed: 2.6, torso: '#0a1a0a', eye: '#44ff44' },
-  berserker:{ speed: 4.8, torso: '#1a0808', eye: '#ff8800' },
+  charger:   { speed: 3.2, torso: '#2a0a0a', eye: '#ff1100' },
+  flanker:   { speed: 2.8, torso: '#0a0a2a', eye: '#4488ff' },
+  stalker:   { speed: 2.4, torso: '#0a2a0a', eye: '#44ff44' },
+  berserker: { speed: 4.0, torso: '#2a1008', eye: '#ff8800' },
 }
 
 const BEHAVIORS: BehaviorType[] = ['charger', 'flanker', 'stalker', 'berserker']
@@ -27,7 +27,7 @@ type Props = {
   playerPos: React.MutableRefObject<THREE.Vector3>
 }
 
-export default function Enemy({ id, index, startPos, playerPos }: Props) {
+export default function Enemy({ index, startPos, playerPos }: Props) {
   const behavior: BehaviorType = BEHAVIORS[index % BEHAVIORS.length]
   const cfg = BEHAVIOR_CONFIGS[behavior]
 
@@ -41,12 +41,15 @@ export default function Enemy({ id, index, startPos, playerPos }: Props) {
   const deathTimer = useRef(0)
   const [dying, setDying] = useState(false)
 
-  // Per-behavior state
   const flankAngle = useRef(Math.random() * Math.PI * 2)
   const stalkerState = useRef<'approach' | 'retreat'>('approach')
-  const stalkerTimer = useRef(0)
+  const stalkerTimer = useRef(1.0)
   const zigzag = useRef(1)
   const zigzagTimer = useRef(0)
+
+  // Patrol: wander point when player is far
+  const wanderTarget = useRef(startPos.clone())
+  const wanderTimer = useRef(0)
 
   useEffect(() => {
     if (!rootRef.current) return
@@ -56,6 +59,7 @@ export default function Enemy({ id, index, startPos, playerPos }: Props) {
       if (hp.current <= 0) {
         isDead.current = true
         useGameStore.getState().addKill(isHead ? 'HEADSHOT' : 'KILL')
+        useGameStore.getState().reportEnemyDeath()
         setDying(true)
       }
     }
@@ -88,59 +92,68 @@ export default function Enemy({ id, index, startPos, playerPos }: Props) {
     const dist = toPlayer.length()
     const dirNorm = toPlayer.clone().normalize()
 
+    const ENGAGE_DIST = 30
     let move = new THREE.Vector3()
 
-    if (behavior === 'charger') {
-      // Straight aggressive rush
-      if (dist > ATTACK_RANGE) {
-        move = dirNorm.clone().multiplyScalar(cfg.speed * delta)
+    if (dist > ENGAGE_DIST) {
+      // Patrol: wander slowly near spawn
+      wanderTimer.current -= delta
+      if (wanderTimer.current <= 0) {
+        const angle = Math.random() * Math.PI * 2
+        wanderTarget.current.set(
+          startPos.x + Math.cos(angle) * 8,
+          0.5,
+          startPos.z + Math.sin(angle) * 8,
+        )
+        wanderTimer.current = 3 + Math.random() * 3
       }
-
-    } else if (behavior === 'flanker') {
-      // Orbit wide, then close in
-      flankAngle.current += delta * 1.4
-      const orbitRadius = Math.max(ATTACK_RANGE, dist - delta * cfg.speed)
-      const targetX = playerPos.current.x + Math.cos(flankAngle.current) * orbitRadius
-      const targetZ = playerPos.current.z + Math.sin(flankAngle.current) * orbitRadius
-      const toTarget = new THREE.Vector3(targetX - pos.x, 0, targetZ - pos.z)
-      if (toTarget.length() > 0.05) {
-        move = toTarget.normalize().multiplyScalar(cfg.speed * delta)
+      const toWander = wanderTarget.current.clone().sub(pos)
+      toWander.y = 0
+      if (toWander.length() > 0.5) {
+        move = toWander.normalize().multiplyScalar(1.2 * delta)
       }
+    } else {
+      // Engage
+      if (behavior === 'charger') {
+        if (dist > ATTACK_RANGE) move = dirNorm.clone().multiplyScalar(cfg.speed * delta)
 
-    } else if (behavior === 'stalker') {
-      // Approach to mid-range, pause, dart in to attack, retreat
-      stalkerTimer.current -= delta
-      const midRange = 3.5
-      if (stalkerState.current === 'approach') {
-        if (dist > midRange) {
-          move = dirNorm.clone().multiplyScalar(cfg.speed * delta)
-        } else if (stalkerTimer.current <= 0) {
-          // Dart in
-          if (dist > ATTACK_RANGE) move = dirNorm.clone().multiplyScalar(cfg.speed * 1.8 * delta)
-          if (dist <= ATTACK_RANGE + 0.3) {
-            stalkerState.current = 'retreat'
-            stalkerTimer.current = 1.2
+      } else if (behavior === 'flanker') {
+        flankAngle.current += delta * 1.2
+        const orbitR = Math.max(ATTACK_RANGE + 0.5, dist * 0.85)
+        const tx = playerPos.current.x + Math.cos(flankAngle.current) * orbitR
+        const tz = playerPos.current.z + Math.sin(flankAngle.current) * orbitR
+        const toT = new THREE.Vector3(tx - pos.x, 0, tz - pos.z)
+        if (toT.length() > 0.05) move = toT.normalize().multiplyScalar(cfg.speed * delta)
+
+      } else if (behavior === 'stalker') {
+        stalkerTimer.current -= delta
+        const midRange = 6
+        if (stalkerState.current === 'approach') {
+          if (dist > midRange) {
+            move = dirNorm.clone().multiplyScalar(cfg.speed * delta)
+          } else if (stalkerTimer.current <= 0) {
+            if (dist > ATTACK_RANGE) move = dirNorm.clone().multiplyScalar(cfg.speed * 2 * delta)
+            if (dist <= ATTACK_RANGE + 0.3) {
+              stalkerState.current = 'retreat'
+              stalkerTimer.current = 1.5
+            }
+          }
+        } else {
+          move = dirNorm.clone().multiplyScalar(-cfg.speed * delta)
+          if (stalkerTimer.current <= 0) {
+            stalkerState.current = 'approach'
+            stalkerTimer.current = 1.0 + Math.random() * 1.0
           }
         }
-      } else {
-        // Retreat
-        move = dirNorm.clone().multiplyScalar(-cfg.speed * delta)
-        if (stalkerTimer.current <= 0) {
-          stalkerState.current = 'approach'
-          stalkerTimer.current = 0.8 + Math.random() * 0.8
-        }
-      }
 
-    } else if (behavior === 'berserker') {
-      // Zigzag sprint
-      zigzagTimer.current -= delta
-      if (zigzagTimer.current <= 0) {
-        zigzag.current *= -1
-        zigzagTimer.current = 0.25 + Math.random() * 0.2
-      }
-      const perp = new THREE.Vector3(-dirNorm.z, 0, dirNorm.x).multiplyScalar(zigzag.current * 0.6)
-      if (dist > ATTACK_RANGE) {
-        move = dirNorm.clone().add(perp).normalize().multiplyScalar(cfg.speed * delta)
+      } else if (behavior === 'berserker') {
+        zigzagTimer.current -= delta
+        if (zigzagTimer.current <= 0) {
+          zigzag.current *= -1
+          zigzagTimer.current = 0.3 + Math.random() * 0.25
+        }
+        const perp = new THREE.Vector3(-dirNorm.z, 0, dirNorm.x).multiplyScalar(zigzag.current * 0.7)
+        if (dist > ATTACK_RANGE) move = dirNorm.clone().add(perp).normalize().multiplyScalar(cfg.speed * delta)
       }
     }
 
@@ -148,7 +161,8 @@ export default function Enemy({ id, index, startPos, playerPos }: Props) {
     rootRef.current.lookAt(playerPos.current.x, pos.y, playerPos.current.z)
 
     if (bodyRef.current) {
-      bodyRef.current.position.y = Math.sin(Date.now() * 0.014) * 0.05
+      const speed = move.length() / delta
+      bodyRef.current.position.y = speed > 0.5 ? Math.sin(Date.now() * 0.016) * 0.06 : 0
     }
 
     attackTimer.current -= delta

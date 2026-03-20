@@ -11,31 +11,6 @@ import MuzzleFlash, { type MuzzleFlashHandle } from './MuzzleFlash'
 import { useGameStore } from '../store/useGameStore'
 import { useWeapon } from './useweapon'
 
-// Player starts at [1.5, 0.5, 1.5] — all spawns are far corners/edges
-const ENEMY_STARTS = [
-  new THREE.Vector3(14.5, 0.5, 14.5),
-  new THREE.Vector3(13.5, 0.5, 1.5),
-  new THREE.Vector3(1.5,  0.5, 13.5),
-  new THREE.Vector3(14.5, 0.5, 7.5),
-  new THREE.Vector3(7.5,  0.5, 14.5),
-  new THREE.Vector3(13.5, 0.5, 10.5),
-  new THREE.Vector3(10.5, 0.5, 13.5),
-  new THREE.Vector3(14.5, 0.5, 3.5),
-  new THREE.Vector3(3.5,  0.5, 14.5),
-]
-
-const TORCH_POSITIONS: [number, number, number][] = [
-  [3.5,  2.5, 3.5],
-  [12.5, 2.5, 3.5],
-  [7.5,  2.5, 7.5],
-  [3.5,  2.5, 12.5],
-  [12.5, 2.5, 12.5],
-  [8.5,  2.5, 2.5],
-  [2.5,  2.5, 8.5],
-  [13.5, 2.5, 8.5],
-  [8.5,  2.5, 13.5],
-]
-
 function FlickerLight({ position }: { position: [number, number, number] }) {
   const light = useRef<THREE.PointLight>(null)
   const offset = useRef(Math.random() * 100)
@@ -44,16 +19,26 @@ function FlickerLight({ position }: { position: [number, number, number] }) {
     const t = clock.elapsedTime + offset.current
     light.current.intensity = 6 + Math.sin(t * 9) * 0.8 + Math.sin(t * 3.3) * 0.4
   })
-  return <pointLight ref={light} position={position} intensity={6} distance={18} color="#ff9944" decay={2} />
+  return <pointLight ref={light} position={position} intensity={6} distance={22} color="#ff9944" decay={2} />
+}
+
+// Static torch grid across the open battlefield
+const TORCH_POSITIONS: [number, number, number][] = []
+for (let x = -80; x <= 80; x += 20) {
+  for (let z = -80; z <= 80; z += 20) {
+    TORCH_POSITIONS.push([x, 2.5, z])
+  }
 }
 
 type PendingHit = { point: THREE.Vector3; normal: THREE.Vector3; isHead: boolean; onHit: (h: boolean) => void }
 
 function Scene() {
   const { camera, scene } = useThree()
-  const playerPos = useRef(new THREE.Vector3(1.5, 0.5, 1.5))
+  const playerPos = useRef(new THREE.Vector3(0, 0.5, 0))
   const currentWeapon = useGameStore((s) => s.currentWeapon)
   const phase = useGameStore((s) => s.phase)
+  const enemiesAlive = useGameStore((s) => s.enemiesAlive)
+  const enemySpawns = useGameStore((s) => s.enemySpawns)
   const { weapon, canShoot, lastShot } = useWeapon(currentWeapon)
   const flashRef = useRef<MuzzleFlashHandle>(null)
   const flashGroup = useRef<THREE.Group>(null)
@@ -61,6 +46,7 @@ function Scene() {
   const isMouseDown = useRef(false)
   const firedThisPress = useRef(false)
   const pendingHits = useRef<PendingHit[]>([])
+  const waveClearing = useRef(false)
 
   useEffect(() => {
     if (flashGroup.current && !flashAdded.current) {
@@ -97,6 +83,20 @@ function Scene() {
     }, 16)
     return () => clearInterval(id)
   }, [])
+
+  // Advance wave when all enemies dead
+  useEffect(() => {
+    if (phase !== 'playing') return
+    if (enemiesAlive === 0 && enemySpawns.length > 0 && !waveClearing.current) {
+      waveClearing.current = true
+      setTimeout(() => {
+        const { nextWave } = useGameStore.getState()
+        const cam = camera
+        nextWave(cam.position.x, cam.position.z)
+        waveClearing.current = false
+      }, 2000)
+    }
+  }, [enemiesAlive, enemySpawns.length, phase, camera])
 
   useFrame(() => {
     playerPos.current.copy(camera.position)
@@ -141,11 +141,11 @@ function Scene() {
       <hemisphereLight args={['#ffddaa', '#aa6633', 3]} />
       <directionalLight intensity={3} color="#ffeecc" position={[8, 8, 8]} />
       <directionalLight intensity={2} color="#ffddaa" position={[-8, 6, -8]} />
-      <fog attach="fog" args={['#3a2010', 22, 44]} />
+      <fog attach="fog" args={['#c8a060', 60, 160]} />
       {TORCH_POSITIONS.map((pos, i) => <FlickerLight key={i} position={pos} />)}
       <GameMap />
-      {ENEMY_STARTS.map((pos, i) => (
-        <Enemy key={i} id={`enemy-${i}`} index={i} startPos={pos} playerPos={playerPos} />
+      {enemySpawns.map((pos, i) => (
+        <Enemy key={`${useGameStore.getState().wave}-${i}`} id={`e${i}`} index={i} startPos={pos} playerPos={playerPos} />
       ))}
       <Player />
       <group ref={flashGroup}>
@@ -155,9 +155,25 @@ function Scene() {
   )
 }
 
+function WaveBanner() {
+  const wave = useGameStore((s) => s.wave)
+  const alive = useGameStore((s) => s.enemiesAlive)
+  if (alive > 0) return null
+  return (
+    <div style={{
+      position: 'fixed', top: '40%', left: '50%', transform: 'translate(-50%,-50%)',
+      fontFamily: 'monospace', color: '#ff4400', fontSize: 28, letterSpacing: 8,
+      textShadow: '0 0 20px #ff440088', pointerEvents: 'none', animation: 'killfade 2s forwards',
+    }}>
+      WAVE {wave} CLEARED
+    </div>
+  )
+}
+
 function Overlay() {
   const phase = useGameStore((s) => s.phase)
   const score = useGameStore((s) => s.score)
+  const wave = useGameStore((s) => s.wave)
   if (phase === 'playing') return null
   const isDead = phase === 'dead'
   return (
@@ -170,11 +186,11 @@ function Overlay() {
       </h1>
       {isDead && (
         <p style={{ color: '#660000', margin: '10px 0 0', fontSize: 18, fontFamily: 'monospace', letterSpacing: 4 }}>
-          SCORE: <span style={{ color: '#ff4444' }}>{score}</span>
+          WAVE {wave} · SCORE: <span style={{ color: '#ff4444' }}>{score}</span>
         </p>
       )}
       <div style={{ width: 200, height: 1, background: '#330000', margin: '24px 0' }} />
-      <button style={btnStyle} onClick={() => useGameStore.setState({ health: 100, score: 0, phase: 'playing' })}>
+      <button style={btnStyle} onClick={() => useGameStore.getState().startGame()}>
         {isDead ? '[ RESPAWN ]' : '[ ENTER ]'}
       </button>
       {!isDead && (
@@ -193,27 +209,23 @@ const overlayStyle: React.CSSProperties = {
   fontFamily: 'monospace', zIndex: 10,
 }
 const btnStyle: React.CSSProperties = {
-  padding: '10px 36px',
-  background: 'transparent',
-  color: '#cc0000',
-  border: '1px solid #550000',
-  fontSize: 16, cursor: 'pointer', letterSpacing: 6, fontFamily: 'monospace',
-  textShadow: '0 0 10px #ff000066',
-  boxShadow: '0 0 20px #33000044',
-  transition: 'all 0.15s',
+  padding: '10px 36px', background: 'transparent', color: '#cc0000',
+  border: '1px solid #550000', fontSize: 16, cursor: 'pointer', letterSpacing: 6,
+  fontFamily: 'monospace', textShadow: '0 0 10px #ff000066', transition: 'all 0.15s',
 }
 
 export default function Game() {
   return (
     <>
       <Canvas
-        camera={{ fov: 80, near: 0.05, far: 32, position: [1.5, 0.5, 1.5] }}
-        style={{ width: '100vw', height: '100vh', background: '#000' }}
+        camera={{ fov: 80, near: 0.05, far: 200, position: [0, 0.5, 0] }}
+        style={{ width: '100vw', height: '100vh', background: '#c8a060' }}
         onCreated={({ camera }) => { camera.rotation.order = 'YXZ' }}
       >
         <Scene />
       </Canvas>
       <HUD />
+      <WaveBanner />
       <Overlay />
     </>
   )

@@ -1,7 +1,7 @@
 'use client'
 
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useEffect } from 'react'
 import * as THREE from 'three'
 import GameMap from './Map'
 import Player from './Player'
@@ -12,25 +12,6 @@ import DecalManager from './DecalManager'
 import MuzzleFlash, { type MuzzleFlashHandle } from './MuzzleFlash'
 import { useGameStore } from '../store/useGameStore'
 import { useWeapon } from './useweapon'
-
-function DamageProjector() {
-  const { camera } = useThree()
-  const numbers = useGameStore((s) => s.damageNumbers)
-  const setDamagePositions = useGameStore((s) => s.setDamagePositions)
-  useFrame(() => {
-    if (!numbers.length) return
-    const newPos: Record<number, { x: number; y: number }> = {}
-    numbers.forEach((n) => {
-      const v = n.position.clone().project(camera)
-      newPos[n.id] = {
-        x: (v.x * 0.5 + 0.5) * window.innerWidth,
-        y: (-v.y * 0.5 + 0.5) * window.innerHeight,
-      }
-    })
-    setDamagePositions(newPos)
-  })
-  return null
-}
 
 const ENEMY_STARTS = [
   new THREE.Vector3(7.5, 0.5, 7.5),
@@ -54,17 +35,16 @@ function FlickerLight({ position }: { position: [number, number, number] }) {
   useFrame(({ clock }) => {
     if (!light.current) return
     const t = clock.elapsedTime + offset.current
-    light.current.intensity = 1.4 + Math.sin(t * 7) * 0.2 + Math.sin(t * 13) * 0.1
+    light.current.intensity = 1.4 + Math.sin(t * 7) * 0.2
   })
   return <pointLight ref={light} position={position} intensity={1.5} distance={14} color="#ffbb66" decay={2} />
 }
 
+type PendingHit = { point: THREE.Vector3; normal: THREE.Vector3; isHead: boolean; onHit: (h: boolean) => void }
+
 function Scene() {
-  const { camera, scene, gl } = useThree()
+  const { camera, scene } = useThree()
   const playerPos = useRef(new THREE.Vector3(1.5, 0.5, 1.5))
-  const addEffect = useGameStore((s) => s.addEffect)
-  const spawnDecal = useGameStore((s) => s.spawnDecal)
-  const registerHit = useGameStore((s) => s.registerHit)
   const currentWeapon = useGameStore((s) => s.currentWeapon)
   const phase = useGameStore((s) => s.phase)
   const { weapon, canShoot, lastShot } = useWeapon(currentWeapon)
@@ -73,14 +53,7 @@ function Scene() {
   const flashAdded = useRef(false)
   const isMouseDown = useRef(false)
   const firedThisPress = useRef(false)
-
-  // Store latest refs to avoid stale closures in useFrame
-  const addEffectRef = useRef(addEffect)
-  const spawnDecalRef = useRef(spawnDecal)
-  const registerHitRef = useRef(registerHit)
-  addEffectRef.current = addEffect
-  spawnDecalRef.current = spawnDecal
-  registerHitRef.current = registerHit
+  const pendingHits = useRef<PendingHit[]>([])
 
   useEffect(() => {
     if (flashGroup.current && !flashAdded.current) {
@@ -104,6 +77,23 @@ function Scene() {
     }
   }, [])
 
+  // Flush pending hits to Zustand OUTSIDE the render loop
+  useEffect(() => {
+    const id = setInterval(() => {
+      const hits = pendingHits.current.splice(0)
+      if (!hits.length) return
+      const { addEffect, spawnDecal, registerHit, addHitMarker } = useGameStore.getState()
+      for (const h of hits) {
+        registerHit(h.isHead ? 'head' : 'body')
+        addHitMarker(h.isHead ? 'head' : 'body')
+        addEffect({ type: 'blood', position: h.point, normal: h.normal, intensity: h.isHead ? 2 : 1 })
+        spawnDecal({ position: h.point, normal: h.normal })
+        h.onHit(h.isHead)
+      }
+    }, 16)
+    return () => clearInterval(id)
+  }, [])
+
   useFrame(() => {
     playerPos.current.copy(camera.position)
 
@@ -118,7 +108,6 @@ function Scene() {
     firedThisPress.current = true
     flashRef.current?.fire()
 
-    // Raycast inline — always uses live scene
     const dir = new THREE.Vector3()
     camera.getWorldDirection(dir)
     dir.x += (Math.random() - 0.5) * weapon.spread
@@ -127,27 +116,22 @@ function Scene() {
 
     const ray = new THREE.Raycaster(camera.position.clone(), dir)
     const hits = ray.intersectObjects(scene.children, true)
+    if (!hits.length) return
 
-    if (hits.length > 0) {
-      const hit = hits[0]
-      const isHead = hit.object.name === 'head'
-      const normal = hit.face?.normal.clone() ?? new THREE.Vector3(0, 1, 0)
+    const hit = hits[0]
+    const isHead = hit.object.name === 'head'
+    const normal = hit.face?.normal.clone() ?? new THREE.Vector3(0, 1, 0)
 
-      registerHitRef.current(isHead ? 'head' : 'body')
-      addEffectRef.current({ type: 'blood', position: hit.point.clone(), normal, intensity: isHead ? weapon.headshotMultiplier : 1 })
-      spawnDecalRef.current({ position: hit.point.clone(), normal })
-
-      let obj: THREE.Object3D | null = hit.object
-      while (obj) {
-        if (obj.userData?.onHit) { obj.userData.onHit(isHead); break }
-        obj = obj.parent
-      }
+    // Find onHit callback without calling it mid-frame
+    let onHit = (_: boolean) => {}
+    let obj: THREE.Object3D | null = hit.object
+    while (obj) {
+      if (obj.userData?.onHit) { onHit = obj.userData.onHit; break }
+      obj = obj.parent
     }
-  })
 
-  const handleDeath = useCallback((pos: THREE.Vector3) => {
-    addEffectRef.current({ type: 'blood', position: pos, intensity: 1.5 })
-  }, [])
+    pendingHits.current.push({ point: hit.point.clone(), normal, isHead, onHit })
+  })
 
   return (
     <>
@@ -156,18 +140,11 @@ function Scene() {
       {TORCH_POSITIONS.map((pos, i) => <FlickerLight key={i} position={pos} />)}
       <GameMap />
       {ENEMY_STARTS.map((pos, i) => (
-        <Enemy
-          key={i}
-          id={`enemy-${i}`}
-          startPos={pos}
-          playerPos={playerPos}
-          onDeath={handleDeath}
-        />
+        <Enemy key={i} id={`enemy-${i}`} startPos={pos} playerPos={playerPos} />
       ))}
       <Player />
       <EffectsManager />
       <DecalManager />
-      <DamageProjector />
       <group ref={flashGroup}>
         <MuzzleFlash ref={flashRef} />
       </group>
@@ -186,10 +163,7 @@ function Overlay() {
         {isDead ? 'YOU DIED' : 'MODUS OPERANDI'}
       </h1>
       {isDead && <p style={{ color: '#aaa', margin: '8px 0 24px', fontSize: 22 }}>Score: {score}</p>}
-      <button
-        style={btnStyle}
-        onClick={() => useGameStore.setState({ health: 100, score: 0, phase: 'playing' })}
-      >
+      <button style={btnStyle} onClick={() => useGameStore.setState({ health: 100, score: 0, phase: 'playing' })}>
         {isDead ? 'RESPAWN' : 'PLAY'}
       </button>
     </div>
@@ -199,17 +173,12 @@ function Overlay() {
 const overlayStyle: React.CSSProperties = {
   position: 'fixed', inset: 0,
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-  background: 'rgba(0,0,0,0.88)',
-  fontFamily: 'monospace',
-  zIndex: 10,
+  background: 'rgba(0,0,0,0.88)', fontFamily: 'monospace', zIndex: 10,
 }
-
 const btnStyle: React.CSSProperties = {
   marginTop: 20, padding: '12px 40px',
   background: '#cc0000', color: '#fff',
-  border: 'none', fontSize: 20,
-  cursor: 'pointer', letterSpacing: 3,
-  fontFamily: 'monospace',
+  border: 'none', fontSize: 20, cursor: 'pointer', letterSpacing: 3, fontFamily: 'monospace',
 }
 
 export default function Game() {

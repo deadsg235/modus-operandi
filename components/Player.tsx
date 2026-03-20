@@ -23,9 +23,6 @@ export default function Player() {
   const phase = useGameStore((s) => s.phase)
   const setWeapon = useGameStore((s) => s.setWeapon)
 
-  // Set rotation order immediately — not in useEffect
-  camera.rotation.order = 'YXZ'
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       keys.current[e.code] = e.type === 'keydown'
@@ -58,9 +55,11 @@ export default function Player() {
   useFrame((_, delta) => {
     if (phase !== 'playing') return
 
+    // Force YXZ every frame — R3F must not override this
     camera.rotation.order = 'YXZ'
     camera.rotation.y = yaw.current
     camera.rotation.x = pitch.current
+    camera.rotation.z = 0
 
     const forward = new THREE.Vector3(-Math.sin(yaw.current), 0, -Math.cos(yaw.current))
     const right   = new THREE.Vector3( Math.cos(yaw.current), 0, -Math.sin(yaw.current))

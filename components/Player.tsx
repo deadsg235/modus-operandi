@@ -25,6 +25,11 @@ export default function Player() {
   const regenHealth = useGameStore((s) => s.regenHealth)
 
   useEffect(() => {
+    camera.rotation.order = 'YXZ'
+    camera.rotation.set(0, 0, 0)
+  }, [camera])
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       keys.current[e.code] = e.type === 'keydown'
       if (e.type === 'keydown') {

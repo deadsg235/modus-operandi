@@ -11,26 +11,29 @@ import MuzzleFlash, { type MuzzleFlashHandle } from './MuzzleFlash'
 import { useGameStore } from '../store/useGameStore'
 import { useWeapon } from './useweapon'
 
+// Player starts at [1.5, 0.5, 1.5] — all spawns are far corners/edges
 const ENEMY_STARTS = [
-  new THREE.Vector3(7.5, 0.5, 7.5),
-  new THREE.Vector3(10.5, 0.5, 2.5),
-  new THREE.Vector3(2.5, 0.5, 10.5),
+  new THREE.Vector3(14.5, 0.5, 14.5),
+  new THREE.Vector3(13.5, 0.5, 1.5),
+  new THREE.Vector3(1.5,  0.5, 13.5),
+  new THREE.Vector3(14.5, 0.5, 7.5),
+  new THREE.Vector3(7.5,  0.5, 14.5),
   new THREE.Vector3(13.5, 0.5, 10.5),
   new THREE.Vector3(10.5, 0.5, 13.5),
-  new THREE.Vector3(5.5, 0.5, 5.5),
-  new THREE.Vector3(12.5, 0.5, 6.5),
-  new THREE.Vector3(3.5, 0.5, 13.5),
-  new THREE.Vector3(9.5, 0.5, 9.5),
+  new THREE.Vector3(14.5, 0.5, 3.5),
+  new THREE.Vector3(3.5,  0.5, 14.5),
 ]
 
 const TORCH_POSITIONS: [number, number, number][] = [
-  [3.5, 2.5, 3.5],
+  [3.5,  2.5, 3.5],
   [12.5, 2.5, 3.5],
-  [7.5, 2.5, 7.5],
-  [3.5, 2.5, 12.5],
+  [7.5,  2.5, 7.5],
+  [3.5,  2.5, 12.5],
   [12.5, 2.5, 12.5],
-  [8.5, 2.5, 2.5],
-  [2.5, 2.5, 8.5],
+  [8.5,  2.5, 2.5],
+  [2.5,  2.5, 8.5],
+  [13.5, 2.5, 8.5],
+  [8.5,  2.5, 13.5],
 ]
 
 function FlickerLight({ position }: { position: [number, number, number] }) {
@@ -39,9 +42,9 @@ function FlickerLight({ position }: { position: [number, number, number] }) {
   useFrame(({ clock }) => {
     if (!light.current) return
     const t = clock.elapsedTime + offset.current
-    light.current.intensity = 1.2 + Math.sin(t * 9) * 0.35 + Math.sin(t * 3.3) * 0.15
+    light.current.intensity = 3.5 + Math.sin(t * 9) * 0.6 + Math.sin(t * 3.3) * 0.3
   })
-  return <pointLight ref={light} position={position} intensity={1.4} distance={10} color="#ff6600" decay={2} />
+  return <pointLight ref={light} position={position} intensity={3.5} distance={14} color="#ff7722" decay={2} />
 }
 
 type PendingHit = { point: THREE.Vector3; normal: THREE.Vector3; isHead: boolean; onHit: (h: boolean) => void }
@@ -134,12 +137,12 @@ function Scene() {
 
   return (
     <>
-      <ambientLight intensity={0.08} color="#110000" />
-      <fog attach="fog" args={['#050005', 8, 22]} />
+      <ambientLight intensity={1.2} color="#3a2010" />
+      <fog attach="fog" args={['#1a0a05', 14, 32]} />
       {TORCH_POSITIONS.map((pos, i) => <FlickerLight key={i} position={pos} />)}
       <GameMap />
       {ENEMY_STARTS.map((pos, i) => (
-        <Enemy key={i} id={`enemy-${i}`} startPos={pos} playerPos={playerPos} />
+        <Enemy key={i} id={`enemy-${i}`} index={i} startPos={pos} playerPos={playerPos} />
       ))}
       <Player />
       <group ref={flashGroup}>
@@ -201,7 +204,7 @@ export default function Game() {
   return (
     <>
       <Canvas
-        camera={{ fov: 80, near: 0.05, far: 30, position: [1.5, 0.5, 1.5] }}
+        camera={{ fov: 80, near: 0.05, far: 32, position: [1.5, 0.5, 1.5] }}
         style={{ width: '100vw', height: '100vh', background: '#000' }}
         onCreated={({ camera }) => { camera.rotation.order = 'YXZ' }}
       >

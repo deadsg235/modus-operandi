@@ -19,8 +19,7 @@ export const MAP: number[][] = [
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
 ]
 
-// Subtle wall color variation for grit
-const WALL_COLORS = ['#1c1410', '#181210', '#1a1310', '#161010', '#1e1512']
+const WALL_COLORS = ['#4a3828', '#3e2e1e', '#453322', '#3a2a18', '#503c2a']
 
 export default function GameMap() {
   const walls: JSX.Element[] = []
@@ -44,15 +43,13 @@ export default function GameMap() {
 
   return (
     <group>
-      {/* Floor — dark cracked concrete */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[W / 2, 0, H / 2]}>
         <planeGeometry args={[W, H]} />
-        <meshLambertMaterial color="#0e0b09" />
+        <meshLambertMaterial color="#2a1e14" />
       </mesh>
-      {/* Ceiling — near black */}
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[W / 2, 1, H / 2]}>
         <planeGeometry args={[W, H]} />
-        <meshLambertMaterial color="#080608" />
+        <meshLambertMaterial color="#1a1210" />
       </mesh>
       {walls}
     </group>

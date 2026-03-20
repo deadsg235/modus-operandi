@@ -5,18 +5,32 @@ import { useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../store/useGameStore'
 
-const ENEMY_SPEED = 3.2
 const ATTACK_RANGE = 0.9
 const ATTACK_DAMAGE = 6
 const ATTACK_COOLDOWN = 1.4
 
+type BehaviorType = 'charger' | 'flanker' | 'stalker' | 'berserker'
+
+const BEHAVIOR_CONFIGS: Record<BehaviorType, { speed: number; torso: string; eye: string }> = {
+  charger:  { speed: 3.8, torso: '#1a0a0a', eye: '#ff1100' },
+  flanker:  { speed: 3.2, torso: '#0a0a1a', eye: '#4488ff' },
+  stalker:  { speed: 2.6, torso: '#0a1a0a', eye: '#44ff44' },
+  berserker:{ speed: 4.8, torso: '#1a0808', eye: '#ff8800' },
+}
+
+const BEHAVIORS: BehaviorType[] = ['charger', 'flanker', 'stalker', 'berserker']
+
 type Props = {
   id: string
+  index: number
   startPos: THREE.Vector3
   playerPos: React.MutableRefObject<THREE.Vector3>
 }
 
-export default function Enemy({ id, startPos, playerPos }: Props) {
+export default function Enemy({ id, index, startPos, playerPos }: Props) {
+  const behavior: BehaviorType = BEHAVIORS[index % BEHAVIORS.length]
+  const cfg = BEHAVIOR_CONFIGS[behavior]
+
   const rootRef = useRef<THREE.Group>(null)
   const bodyRef = useRef<THREE.Group>(null)
   const hp = useRef(100)
@@ -26,6 +40,13 @@ export default function Enemy({ id, startPos, playerPos }: Props) {
   const [dead, setDead] = useState(false)
   const deathTimer = useRef(0)
   const [dying, setDying] = useState(false)
+
+  // Per-behavior state
+  const flankAngle = useRef(Math.random() * Math.PI * 2)
+  const stalkerState = useRef<'approach' | 'retreat'>('approach')
+  const stalkerTimer = useRef(0)
+  const zigzag = useRef(1)
+  const zigzagTimer = useRef(0)
 
   useEffect(() => {
     if (!rootRef.current) return
@@ -62,19 +83,72 @@ export default function Enemy({ id, startPos, playerPos }: Props) {
     }
 
     const pos = rootRef.current.position
-    const dir = playerPos.current.clone().sub(pos)
-    dir.y = 0
-    const dist = dir.length()
+    const toPlayer = playerPos.current.clone().sub(pos)
+    toPlayer.y = 0
+    const dist = toPlayer.length()
+    const dirNorm = toPlayer.clone().normalize()
 
-    if (dist > ATTACK_RANGE) {
-      dir.normalize().multiplyScalar(ENEMY_SPEED * delta)
-      pos.add(dir)
+    let move = new THREE.Vector3()
+
+    if (behavior === 'charger') {
+      // Straight aggressive rush
+      if (dist > ATTACK_RANGE) {
+        move = dirNorm.clone().multiplyScalar(cfg.speed * delta)
+      }
+
+    } else if (behavior === 'flanker') {
+      // Orbit wide, then close in
+      flankAngle.current += delta * 1.4
+      const orbitRadius = Math.max(ATTACK_RANGE, dist - delta * cfg.speed)
+      const targetX = playerPos.current.x + Math.cos(flankAngle.current) * orbitRadius
+      const targetZ = playerPos.current.z + Math.sin(flankAngle.current) * orbitRadius
+      const toTarget = new THREE.Vector3(targetX - pos.x, 0, targetZ - pos.z)
+      if (toTarget.length() > 0.05) {
+        move = toTarget.normalize().multiplyScalar(cfg.speed * delta)
+      }
+
+    } else if (behavior === 'stalker') {
+      // Approach to mid-range, pause, dart in to attack, retreat
+      stalkerTimer.current -= delta
+      const midRange = 3.5
+      if (stalkerState.current === 'approach') {
+        if (dist > midRange) {
+          move = dirNorm.clone().multiplyScalar(cfg.speed * delta)
+        } else if (stalkerTimer.current <= 0) {
+          // Dart in
+          if (dist > ATTACK_RANGE) move = dirNorm.clone().multiplyScalar(cfg.speed * 1.8 * delta)
+          if (dist <= ATTACK_RANGE + 0.3) {
+            stalkerState.current = 'retreat'
+            stalkerTimer.current = 1.2
+          }
+        }
+      } else {
+        // Retreat
+        move = dirNorm.clone().multiplyScalar(-cfg.speed * delta)
+        if (stalkerTimer.current <= 0) {
+          stalkerState.current = 'approach'
+          stalkerTimer.current = 0.8 + Math.random() * 0.8
+        }
+      }
+
+    } else if (behavior === 'berserker') {
+      // Zigzag sprint
+      zigzagTimer.current -= delta
+      if (zigzagTimer.current <= 0) {
+        zigzag.current *= -1
+        zigzagTimer.current = 0.25 + Math.random() * 0.2
+      }
+      const perp = new THREE.Vector3(-dirNorm.z, 0, dirNorm.x).multiplyScalar(zigzag.current * 0.6)
+      if (dist > ATTACK_RANGE) {
+        move = dirNorm.clone().add(perp).normalize().multiplyScalar(cfg.speed * delta)
+      }
     }
 
+    pos.add(move)
     rootRef.current.lookAt(playerPos.current.x, pos.y, playerPos.current.z)
 
     if (bodyRef.current) {
-      bodyRef.current.position.y = Math.sin(Date.now() * 0.012) * 0.04
+      bodyRef.current.position.y = Math.sin(Date.now() * 0.014) * 0.05
     }
 
     attackTimer.current -= delta
@@ -89,43 +163,38 @@ export default function Enemy({ id, startPos, playerPos }: Props) {
   return (
     <group ref={rootRef} position={startPos}>
       <group ref={bodyRef}>
-        {/* torso */}
         <mesh name="body" position={[0, 0.3, 0]}>
           <boxGeometry args={[0.42, 0.5, 0.22]} />
-          <meshStandardMaterial color="#1a0a0a" roughness={0.9} metalness={0.1} />
+          <meshStandardMaterial color={cfg.torso} roughness={0.9} metalness={0.15} />
         </mesh>
-        {/* head */}
         <mesh name="head" position={[0, 0.72, 0]}>
           <boxGeometry args={[0.28, 0.28, 0.28]} />
-          <meshStandardMaterial color="#3d1a0a" roughness={0.85} />
+          <meshStandardMaterial color={cfg.torso} roughness={0.85} />
         </mesh>
-        {/* glowing eyes */}
         <mesh position={[-0.07, 0.76, 0.14]}>
           <sphereGeometry args={[0.035, 6, 6]} />
-          <meshBasicMaterial color="#ff1100" />
+          <meshBasicMaterial color={cfg.eye} />
         </mesh>
         <mesh position={[0.07, 0.76, 0.14]}>
           <sphereGeometry args={[0.035, 6, 6]} />
-          <meshBasicMaterial color="#ff1100" />
+          <meshBasicMaterial color={cfg.eye} />
         </mesh>
-        <pointLight position={[0, 0.76, 0.2]} color="#ff1100" intensity={0.6} distance={1.5} decay={2} />
-        {/* arms */}
+        <pointLight position={[0, 0.76, 0.2]} color={cfg.eye} intensity={0.8} distance={2} decay={2} />
         <mesh position={[-0.28, 0.22, 0]}>
           <boxGeometry args={[0.12, 0.44, 0.12]} />
-          <meshStandardMaterial color="#1a0a0a" roughness={0.9} />
+          <meshStandardMaterial color={cfg.torso} roughness={0.9} />
         </mesh>
         <mesh position={[0.28, 0.22, 0]}>
           <boxGeometry args={[0.12, 0.44, 0.12]} />
-          <meshStandardMaterial color="#1a0a0a" roughness={0.9} />
+          <meshStandardMaterial color={cfg.torso} roughness={0.9} />
         </mesh>
-        {/* legs */}
         <mesh position={[-0.12, -0.18, 0]}>
           <boxGeometry args={[0.14, 0.38, 0.14]} />
-          <meshStandardMaterial color="#1a0a0a" roughness={0.9} />
+          <meshStandardMaterial color={cfg.torso} roughness={0.9} />
         </mesh>
         <mesh position={[0.12, -0.18, 0]}>
           <boxGeometry args={[0.14, 0.38, 0.14]} />
-          <meshStandardMaterial color="#1a0a0a" roughness={0.9} />
+          <meshStandardMaterial color={cfg.torso} roughness={0.9} />
         </mesh>
       </group>
     </group>

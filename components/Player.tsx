@@ -10,6 +10,8 @@ import { type WeaponType } from '../store/useGameStore'
 const SPEED = 4
 const HALF_PI = Math.PI / 2
 
+export const pitchRef = { current: 0 }
+
 function isSolid(x: number, z: number) {
   const col = Math.floor(x)
   const row = Math.floor(z)
@@ -21,6 +23,7 @@ export default function Player() {
   const keys = useRef<Record<string, boolean>>({})
   const yaw = useRef(0)
   const pitch = useRef(0)
+  pitchRef.current = pitch.current // expose for recoil
   const setPosition = useGameStore((s) => s.setPosition)
   const phase = useGameStore((s) => s.phase)
   const setWeapon = useGameStore((s) => s.setWeapon)
@@ -38,6 +41,7 @@ export default function Player() {
       if (document.pointerLockElement !== gl.domElement) return
       yaw.current -= e.movementX * 0.002
       pitch.current = Math.max(-HALF_PI + 0.1, Math.min(HALF_PI - 0.1, pitch.current - e.movementY * 0.002))
+      pitchRef.current = pitch.current
     }
     const onClick = () => {
       if (phase !== 'playing') return
@@ -58,6 +62,9 @@ export default function Player() {
 
   useFrame((_, delta) => {
     if (phase !== 'playing') return
+
+    // sync pitch from external writes (e.g. recoil)
+    pitch.current = pitchRef.current
 
     camera.rotation.order = 'YXZ'
     camera.rotation.y = yaw.current

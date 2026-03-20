@@ -11,6 +11,7 @@ import EffectsManager from './EffectsManager'
 import MuzzleFlash, { type MuzzleFlashHandle } from './MuzzleFlash'
 import { useGameStore } from '../store/useGameStore'
 import { useWeapon } from './useweapon'
+import { pitchRef } from './Player'
 
 function DamageProjector() {
   const { camera } = useThree()
@@ -54,7 +55,7 @@ function FlickerLight({ position }: { position: [number, number, number] }) {
     const t = clock.elapsedTime + offset.current
     light.current.intensity = 0.8 + Math.sin(t * 7) * 0.15 + Math.sin(t * 13) * 0.05
   })
-  return <pointLight ref={light} position={position} intensity={0.9} distance={6} color="#ff9944" decay={2} />
+  return <pointLight ref={light} position={position} intensity={1.5} distance={12} color="#ff9944" decay={2} />
 }
 
 // Separate inner component so hooks (useThree, useFrame) run inside Canvas context
@@ -81,6 +82,8 @@ function Scene() {
     }
   }, [addEffect])
 
+  const shootRef = useRef<() => void>(() => {})
+
   const shoot = useCallback(() => {
     const time = performance.now() / 1000
     if (!canShoot(time)) return
@@ -100,7 +103,7 @@ function Scene() {
     const intersects = raycaster.intersectObjects(scene.children, true)
 
     const recoil = getRecoil()
-    camera.rotation.x -= recoil
+    pitchRef.current = Math.max(-Math.PI / 2 + 0.1, pitchRef.current - recoil)
 
     if (intersects.length > 0) {
       const hit = intersects[0]
@@ -126,14 +129,16 @@ function Scene() {
     }
   }, [camera, scene, weapon, canShoot, getRecoil, lastShot, registerHit, addEffect, spawnDecal, spawnDirectionalSpray])
 
+  shootRef.current = shoot
+
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
       if (document.pointerLockElement !== gl.domElement) return
-      if (e.button === 0) shoot()
+      if (e.button === 0) shootRef.current()
     }
     window.addEventListener('mousedown', onMouseDown)
     return () => window.removeEventListener('mousedown', onMouseDown)
-  }, [gl, shoot])
+  }, [gl])
 
   const handleDeath = useCallback((pos: THREE.Vector3) => {
     addEffect({ type: 'blood', position: pos, intensity: 1.5 })
@@ -141,8 +146,8 @@ function Scene() {
 
   return (
     <>
-      <ambientLight intensity={0.2} />
-      <fog attach="fog" args={['#000000', 5, 20]} />
+      <ambientLight intensity={0.6} />
+      <fog attach="fog" args={['#000000', 10, 28]} />
       {TORCH_POSITIONS.map((pos, i) => <FlickerLight key={i} position={pos} />)}
       <GameMap />
       {ENEMY_STARTS.map((pos, i) => (
